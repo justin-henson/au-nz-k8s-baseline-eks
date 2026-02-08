@@ -22,8 +22,8 @@ module "eks" {
 
   # Cluster encryption
   # Disabled to work around KMS type mismatch bug in EKS module
-  create_kms_key              = false
-  cluster_encryption_config   = {}
+  create_kms_key            = false
+  cluster_encryption_config = {}
 
   # Cluster logging
   # Enable control plane logs for audit and troubleshooting
