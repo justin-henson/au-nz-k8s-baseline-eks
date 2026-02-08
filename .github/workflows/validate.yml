@@ -1,0 +1,220 @@
+name: Validate Infrastructure and Manifests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  TERRAFORM_VERSION: "1.9"
+  KUBECONFORM_VERSION: "0.6.4"
+
+jobs:
+  terraform-validate:
+    name: Terraform Validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform fmt check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform init
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Comment fmt status
+        if: steps.fmt.outcome == 'failure'
+        run: |
+          echo "::warning::Terraform formatting issues found. Run 'terraform fmt -recursive' to fix."
+
+  kubernetes-validate:
+    name: Kubernetes Manifest Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          VERSION="${{ env.KUBECONFORM_VERSION }}"
+          curl -sL \
+            "https://github.com/yannh/kubeconform/releases/download/v${VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz -C /tmp
+          sudo mv /tmp/kubeconform /usr/local/bin/
+          kubeconform -v
+
+      - name: Validate Kubernetes manifests
+        run: |
+          echo "Validating Kubernetes manifests..."
+          SCHEMA_BASE="https://raw.githubusercontent.com/datreeio/CRDs-catalog/main"
+          SCHEMA_URL="${SCHEMA_BASE}/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
+          find k8s -name '*.yaml' -o -name '*.yml' | while read -r file; do
+            echo "Validating $file"
+            kubeconform \
+              -summary \
+              -kubernetes-version 1.31.0 \
+              -schema-location default \
+              -schema-location "${SCHEMA_URL}" \
+              -ignore-missing-schemas \
+              "$file"
+          done
+
+      - name: Check for deprecated APIs
+        run: |
+          echo "Checking for deprecated Kubernetes APIs..."
+          # Check for deprecated APIs that will be removed in future versions
+          if grep -r "apiVersion: extensions/v1beta1" k8s/ 2>/dev/null; then
+            echo "::error::Found deprecated extensions/v1beta1 API"
+            exit 1
+          fi
+          if grep -r "apiVersion: apps/v1beta1" k8s/ 2>/dev/null; then
+            echo "::error::Found deprecated apps/v1beta1 API"
+            exit 1
+          fi
+          if grep -r "apiVersion: apps/v1beta2" k8s/ 2>/dev/null; then
+            echo "::error::Found deprecated apps/v1beta2 API"
+            exit 1
+          fi
+          echo "No deprecated APIs found."
+
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Create yamllint config
+        run: |
+          cat > .yamllint << EOF
+          extends: default
+          rules:
+            line-length:
+              max: 120
+              level: warning
+            indentation:
+              spaces: 2
+            comments:
+              min-spaces-from-content: 1
+            document-start: disable
+            truthy:
+              allowed-values: ['true', 'false', 'yes', 'no']
+          EOF
+
+      - name: Lint YAML files
+        run: |
+          yamllint k8s/ || true
+
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run shellcheck
+        run: |
+          find scripts -name "*.sh" -type f -exec shellcheck {} +
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy security scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'  # Don't fail the build on security issues (just report)
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  documentation-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check README exists
+        run: |
+          if [ ! -f README.md ]; then
+            echo "::error::README.md not found"
+            exit 1
+          fi
+
+      - name: Check documentation files
+        run: |
+          REQUIRED_DOCS=(
+            "docs/ARCHITECTURE.md"
+            "docs/DECISION-LOG.md"
+            "docs/COST-ESTIMATE.md"
+            "docs/UPGRADE-RUNBOOK.md"
+          )
+
+          for doc in "${REQUIRED_DOCS[@]}"; do
+            if [ ! -f "$doc" ]; then
+              echo "::error::Required documentation file missing: $doc"
+              exit 1
+            fi
+          done
+
+      - name: Check for broken links in README
+        run: |
+          # Simple check for common broken link patterns
+          if grep -E '\[.*\]\(.*http://localhost.*\)' README.md; then
+            echo "::warning::Found localhost links in README"
+          fi
+
+  all-checks-passed:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [terraform-validate, kubernetes-validate, yaml-lint, shellcheck, security-scan, documentation-check]
+    if: always()
+
+    steps:
+      - name: Check if all jobs succeeded
+        run: |
+          if [ "${{ needs.terraform-validate.result }}" != "success" ] || \
+             [ "${{ needs.kubernetes-validate.result }}" != "success" ] || \
+             [ "${{ needs.shellcheck.result }}" != "success" ] || \
+             [ "${{ needs.documentation-check.result }}" != "success" ]; then
+            echo "::error::One or more validation checks failed"
+            exit 1
+          fi
+          echo "✅ All validation checks passed!"
