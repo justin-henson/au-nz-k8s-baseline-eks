@@ -42,7 +42,7 @@
 #   https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.8.1/v2_8_1_full.yaml
 #
 # Edit the manifest:
-# - Replace 'your-cluster-name' with 'baseline-eks'
+# - Replace 'baseline-eks' with 'baseline-eks'
 # - Add the IRSA annotation to the ServiceAccount
 #
 # Apply the manifest:

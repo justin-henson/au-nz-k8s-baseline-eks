@@ -6,7 +6,7 @@ kind: ClusterRole
 metadata:
   name: dev-team-reader
   labels:
-    rbac.example.com/team: dev-team
+    rbac.baseline-eks/team: dev-team
 rules:
   # Read access to pods and logs
   - apiGroups: [""]
@@ -52,11 +52,11 @@ metadata:
   name: dev-team-reader-binding
   namespace: demo-app
   labels:
-    rbac.example.com/team: dev-team
+    rbac.baseline-eks/team: dev-team
 subjects:
   # Example: Bind to a specific user
   - kind: User
-    name: "developer@example.com"
+    name: "developer@company.internal"
     apiGroup: rbac.authorization.k8s.io
 
   # Example: Bind to a group (e.g., from OIDC/SAML provider)
@@ -82,7 +82,7 @@ metadata:
   name: dev-team-sa
   namespace: demo-app
   labels:
-    rbac.example.com/team: dev-team
+    rbac.baseline-eks/team: dev-team
 
 ---
 # ClusterRole: Dev team with write access (deployment permissions)
@@ -91,7 +91,7 @@ kind: ClusterRole
 metadata:
   name: dev-team-deployer
   labels:
-    rbac.example.com/team: dev-team
+    rbac.baseline-eks/team: dev-team
 rules:
   # Full access to deployments, replicasets, statefulsets
   - apiGroups: ["apps"]
@@ -134,7 +134,7 @@ metadata:
   name: dev-team-deployer-binding
   namespace: demo-app
   labels:
-    rbac.example.com/team: dev-team
+    rbac.baseline-eks/team: dev-team
 subjects:
   - kind: Group
     name: "dev-team-senior"
