@@ -1,0 +1,63 @@
+# Pod Security Standards (PSS)
+#
+# Kubernetes Pod Security Standards provide a way to enforce security policies at the namespace level.
+# There are three levels: privileged, baseline, and restricted.
+#
+# - Privileged: Unrestricted (for system-level workloads)
+# - Baseline: Minimally restrictive (prevents known privilege escalations)
+# - Restricted: Heavily restricted (follows current pod hardening best practices)
+#
+# PSS is applied via namespace labels (see namespaces/demo-app.yaml):
+#   pod-security.kubernetes.io/enforce: restricted
+#   pod-security.kubernetes.io/audit: restricted
+#   pod-security.kubernetes.io/warn: restricted
+#
+# The "restricted" standard requires:
+# - Running as non-root
+# - Dropping all capabilities
+# - No privilege escalation
+# - Using seccomp, AppArmor, or SELinux
+# - Read-only root filesystem (where possible)
+# - Restricting host access (no hostNetwork, hostPID, hostIPC, hostPath)
+#
+# This file serves as documentation. The actual enforcement is done via namespace labels.
+# To apply the restricted standard to the demo-app namespace, the labels are already set in:
+# k8s/namespaces/demo-app.yaml
+
+---
+# Example: Applying PSS to a namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-restricted
+  labels:
+    # Enforce: Reject pods that violate the policy
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+
+    # Audit: Log violations but allow pods to run
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+
+    # Warn: Show warnings to users but allow pods to run
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+
+---
+# Example: Baseline PSS for less restrictive workloads
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-baseline
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/warn-version: latest
+
+---
+# For cluster-wide PSS defaults, configure the EKS cluster with admission controller settings.
+# This is typically done via the EKS API or during cluster creation.
+# Reference: https://kubernetes.io/docs/concepts/security/pod-security-standards/

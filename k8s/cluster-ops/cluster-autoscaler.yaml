@@ -1,0 +1,139 @@
+# Cluster Autoscaler
+#
+# Cluster Autoscaler automatically adjusts the size of the Kubernetes cluster when:
+# - Pods fail to schedule due to insufficient resources (scale up)
+# - Nodes are underutilized and pods can be rescheduled elsewhere (scale down)
+#
+# For EKS, Cluster Autoscaler integrates with Auto Scaling Groups (ASGs).
+# Alternative: Consider Karpenter for more flexible and efficient node provisioning.
+
+---
+# Prerequisites:
+# 1. EKS node group with auto scaling enabled (min/max size configured)
+# 2. IAM permissions for Cluster Autoscaler to modify ASG
+# 3. Node group tagged with:
+#    - k8s.io/cluster-autoscaler/<cluster-name> = owned
+#    - k8s.io/cluster-autoscaler/enabled = true
+
+---
+# Installation via Helm (Recommended):
+#
+# 1. Add the autoscaler Helm repository:
+#    helm repo add autoscaler https://kubernetes.github.io/autoscaler
+#    helm repo update
+#
+# 2. Install cluster-autoscaler:
+#    helm install cluster-autoscaler autoscaler/cluster-autoscaler \
+#      --namespace kube-system \
+#      --set autoDiscovery.clusterName=baseline-eks \
+#      --set awsRegion=ap-southeast-2 \
+#      --set rbac.serviceAccount.create=true \
+#      --set rbac.serviceAccount.name=cluster-autoscaler \
+#      --set rbac.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"= \
+#        arn:aws:iam::ACCOUNT_ID:role/baseline-eks-cluster-autoscaler
+#
+# 3. Verify installation:
+#    kubectl get deployment -n kube-system cluster-autoscaler
+#    kubectl logs -n kube-system deployment/cluster-autoscaler
+
+---
+# Installation via kubectl (Alternative):
+#
+# 1. Download the autoscaler manifest:
+#    curl -o cluster-autoscaler-autodiscover.yaml \
+#      https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/\
+#examples/cluster-autoscaler-autodiscover.yaml
+#
+# 2. Edit the manifest:
+#    - Replace <YOUR CLUSTER NAME> with baseline-eks
+#    - Add IRSA annotation to ServiceAccount
+#
+# 3. Apply the manifest:
+#    kubectl apply -f cluster-autoscaler-autodiscover.yaml
+
+---
+# IAM Policy for Cluster Autoscaler:
+#
+# The IAM role needs these permissions:
+# {
+#   "Version": "2012-10-17",
+#   "Statement": [
+#     {
+#       "Effect": "Allow",
+#       "Action": [
+#         "autoscaling:DescribeAutoScalingGroups",
+#         "autoscaling:DescribeAutoScalingInstances",
+#         "autoscaling:DescribeLaunchConfigurations",
+#         "autoscaling:DescribeScalingActivities",
+#         "autoscaling:DescribeTags",
+#         "ec2:DescribeImages",
+#         "ec2:DescribeInstanceTypes",
+#         "ec2:DescribeLaunchTemplateVersions",
+#         "ec2:GetInstanceTypesFromInstanceRequirements",
+#         "eks:DescribeNodegroup"
+#       ],
+#       "Resource": ["*"]
+#     },
+#     {
+#       "Effect": "Allow",
+#       "Action": [
+#         "autoscaling:SetDesiredCapacity",
+#         "autoscaling:TerminateInstanceInAutoScalingGroup"
+#       ],
+#       "Resource": ["*"]
+#     }
+#   ]
+# }
+
+---
+# Configuration Options:
+#
+# Key flags for cluster-autoscaler:
+#   --balance-similar-node-groups=false
+#   --skip-nodes-with-system-pods=false
+#   --scale-down-enabled=true
+#   --scale-down-unneeded-time=10m
+#   --scale-down-delay-after-add=10m
+#   --scale-down-utilization-threshold=0.5
+#   --max-node-provision-time=15m
+
+---
+# Verification:
+#
+# Check that cluster-autoscaler is running:
+#   kubectl get pods -n kube-system -l app=cluster-autoscaler
+#
+# Check logs:
+#   kubectl logs -n kube-system -l app=cluster-autoscaler
+#
+# Test auto-scaling:
+#   1. Deploy a workload that exceeds current capacity
+#   2. Watch nodes being added: kubectl get nodes -w
+#   3. Delete the workload and watch scale-down (after ~10 minutes)
+
+---
+# Common Issues:
+#
+# 1. Pods not scaling: Check that pod requests are set (HPA + Cluster Autoscaler require requests)
+# 2. Nodes not scaling down: Check for pods with PVCs or local storage
+# 3. IAM permissions: Ensure IRSA role has correct ASG permissions
+# 4. Version mismatch: Use cluster-autoscaler version that matches your Kubernetes version
+
+---
+# Alternative: Karpenter
+#
+# For more flexible and efficient node provisioning, consider Karpenter instead:
+# - Faster node provisioning (no ASG configuration needed)
+# - Better bin-packing and instance type selection
+# - Direct API-based node creation (not ASG-based)
+#
+# Karpenter installation:
+#   helm repo add karpenter https://charts.karpenter.sh
+#   helm install karpenter karpenter/karpenter --namespace karpenter --create-namespace
+#
+# Reference: https://karpenter.sh/
+
+---
+# Reference:
+# - Cluster Autoscaler: https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler
+# - EKS User Guide: https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html

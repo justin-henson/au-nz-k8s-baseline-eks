@@ -1,0 +1,93 @@
+# AWS Load Balancer Controller
+#
+# The AWS Load Balancer Controller manages AWS Elastic Load Balancers for Kubernetes Ingress resources.
+# It provisions ALBs (Application Load Balancers) and NLBs (Network Load Balancers) based on Ingress
+# and Service annotations.
+#
+# Installation via Helm is recommended over raw manifests for easier upgrades.
+#
+# Prerequisites:
+# 1. EKS cluster with OIDC provider enabled
+# 2. IAM role for service account (created in terraform/iam.tf)
+# 3. VPC subnets tagged for auto-discovery (done in terraform/vpc.tf)
+
+---
+# Installation Steps:
+#
+# 1. Add the EKS Helm repository:
+#    helm repo add eks https://aws.github.io/eks-charts
+#    helm repo update
+#
+# 2. Install the AWS Load Balancer Controller:
+#    helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+#      --namespace kube-system \
+#      --set clusterName=baseline-eks \
+#      --set serviceAccount.create=true \
+#      --set serviceAccount.name=aws-load-balancer-controller \
+#      --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"= \
+#        arn:aws:iam::ACCOUNT_ID:role/baseline-eks-aws-lb-controller
+#
+# 3. Verify installation:
+#    kubectl get deployment -n kube-system aws-load-balancer-controller
+#    kubectl logs -n kube-system deployment/aws-load-balancer-controller
+#
+# 4. Check that the webhook is working:
+#    kubectl get validatingwebhookconfigurations
+#    kubectl get mutatingwebhookconfigurations
+
+---
+# Alternative: Install via raw manifests
+# Download the latest manifest:
+# curl -Lo v2_8_1_full.yaml \
+#   https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.8.1/v2_8_1_full.yaml
+#
+# Edit the manifest:
+# - Replace 'your-cluster-name' with 'baseline-eks'
+# - Add the IRSA annotation to the ServiceAccount
+#
+# Apply the manifest:
+# kubectl apply -f v2_8_1_full.yaml
+
+---
+# Verification:
+#
+# After installation, verify the controller is running:
+#   kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+#
+# Check logs for any errors:
+#   kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+#
+# Test by creating an Ingress resource (see k8s/demo-app/ingress.yaml)
+# The controller should provision an ALB and update the Ingress status with the ALB URL.
+
+---
+# Common Issues:
+#
+# 1. IAM permissions: Ensure the IRSA role has the correct permissions
+#    https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
+#
+# 2. Subnet tags: Ensure VPC subnets are tagged correctly
+#    - Public subnets: kubernetes.io/role/elb=1
+#    - Private subnets: kubernetes.io/role/internal-elb=1
+#
+# 3. Security groups: The controller needs to manage security group rules
+#    Ensure the IAM role has ec2:AuthorizeSecurityGroupIngress permissions
+#
+# 4. Webhook certificate: If the webhook fails, check certificate status
+#    kubectl get secret -n kube-system aws-load-balancer-webhook-tls
+
+---
+# IngressClass configuration:
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: alb
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: ingress.k8s.aws/alb
+
+---
+# Reference:
+# - AWS Load Balancer Controller docs: https://kubernetes-sigs.github.io/aws-load-balancer-controller/
+# - Ingress annotations: https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.8/guide/ingress/annotations/

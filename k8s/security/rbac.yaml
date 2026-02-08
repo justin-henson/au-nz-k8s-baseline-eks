@@ -1,0 +1,146 @@
+---
+# ClusterRole: Defines permissions at cluster level
+# This role grants read-only access to common resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dev-team-reader
+  labels:
+    rbac.example.com/team: dev-team
+rules:
+  # Read access to pods and logs
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+  # Read access to deployments, replicasets, statefulsets
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+
+  # Read access to services and endpoints
+  - apiGroups: [""]
+    resources: ["services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+
+  # Read access to configmaps (but not secrets!)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  # Read access to ingresses
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+
+  # Read access to HPA
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+
+  # Read access to events for troubleshooting
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding: Binds the ClusterRole to users/groups in a specific namespace
+# This grants dev-team members read access in the demo-app namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-team-reader-binding
+  namespace: demo-app
+  labels:
+    rbac.example.com/team: dev-team
+subjects:
+  # Example: Bind to a specific user
+  - kind: User
+    name: "developer@example.com"
+    apiGroup: rbac.authorization.k8s.io
+
+  # Example: Bind to a group (e.g., from OIDC/SAML provider)
+  - kind: Group
+    name: "dev-team"
+    apiGroup: rbac.authorization.k8s.io
+
+  # Example: Bind to a ServiceAccount
+  - kind: ServiceAccount
+    name: dev-team-sa
+    namespace: demo-app
+
+roleRef:
+  kind: ClusterRole
+  name: dev-team-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ServiceAccount for the dev team
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dev-team-sa
+  namespace: demo-app
+  labels:
+    rbac.example.com/team: dev-team
+
+---
+# ClusterRole: Dev team with write access (deployment permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dev-team-deployer
+  labels:
+    rbac.example.com/team: dev-team
+rules:
+  # Full access to deployments, replicasets, statefulsets
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Full access to pods (including exec for debugging)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  - apiGroups: [""]
+    resources: ["pods/log", "pods/exec"]
+    verbs: ["get", "create"]
+
+  # Full access to services and configmaps
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Full access to ingresses and HPA
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Read-only access to secrets (no create/update/delete)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+
+---
+# RoleBinding: Bind deployer role to senior dev team members in demo-app namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-team-deployer-binding
+  namespace: demo-app
+  labels:
+    rbac.example.com/team: dev-team
+subjects:
+  - kind: Group
+    name: "dev-team-senior"
+    apiGroup: rbac.authorization.k8s.io
+
+roleRef:
+  kind: ClusterRole
+  name: dev-team-deployer
+  apiGroup: rbac.authorization.k8s.io
