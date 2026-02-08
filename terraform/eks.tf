@@ -1,6 +1,6 @@
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.31"
+  version = "20.24.2"
 
   cluster_name    = var.cluster_name
   cluster_version = var.cluster_version
@@ -21,12 +21,9 @@ module "eks" {
   enable_irsa = true
 
   # Cluster encryption
-  # Envelope encryption for secrets at rest using AWS KMS
-  create_kms_key = var.enable_cluster_encryption
-  cluster_encryption_config = var.enable_cluster_encryption ? {
-    resources        = ["secrets"]
-    provider_key_arn = null # Will use the created KMS key
-  } : {}
+  # Disabled to work around KMS type mismatch bug in EKS module
+  create_kms_key              = false
+  cluster_encryption_config   = {}
 
   # Cluster logging
   # Enable control plane logs for audit and troubleshooting
@@ -38,8 +35,8 @@ module "eks" {
 
   # Managed node group
   eks_managed_node_groups = {
-    baseline = {
-      name = "${var.cluster_name}-node-group"
+    default = {
+      name = "nodes"
 
       instance_types = var.node_instance_types
       capacity_type  = "ON_DEMAND" # Use ON_DEMAND for reliability; SPOT for cost savings
@@ -51,7 +48,7 @@ module "eks" {
       # Node labels for workload targeting
       labels = {
         Environment = var.environment
-        NodeGroup   = "baseline"
+        NodeGroup   = "default"
       }
 
       # Taints can be used to dedicate nodes to specific workloads
@@ -59,7 +56,7 @@ module "eks" {
       # taints = [
       #   {
       #     key    = "dedicated"
-      #     value  = "baseline"
+      #     value  = "default"
       #     effect = "NoSchedule"
       #   }
       # ]

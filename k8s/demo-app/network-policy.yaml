@@ -31,7 +31,7 @@ spec:
               name: kube-system
       ports:
         - protocol: TCP
-          port: 8080
+          port: 80
 
 ---
 # Allow ingress from monitoring namespace
@@ -53,7 +53,7 @@ spec:
               name: monitoring
       ports:
         - protocol: TCP
-          port: 8080
+          port: 80
 
 ---
 # Allow egress to DNS and external services

@@ -44,7 +44,7 @@ spec:
           image: kennethreitz/httpbin:latest
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: 80
               protocol: TCP
 
           # Resource requests and limits
@@ -91,7 +91,7 @@ spec:
           # Environment variables (IRSA credentials injected automatically)
           env:
             - name: PORT
-              value: "8080"
+              value: "80"
 
           # Volume mounts for writable directories
           volumeMounts:

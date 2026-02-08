@@ -317,15 +317,15 @@ terraform apply
 ```bash
 aws eks update-nodegroup-version \
   --cluster-name baseline-eks \
-  --nodegroup-name baseline-node-group \
-  --launch-template name=baseline-node-group,version=\$Latest
+  --nodegroup-name nodes \
+  --launch-template name=nodes,version=\$Latest
 ```
 
 **Monitor upgrade:**
 ```bash
 aws eks describe-nodegroup-update \
   --cluster-name baseline-eks \
-  --nodegroup-name baseline-node-group \
+  --nodegroup-name nodes \
   --update-id UPDATE_ID
 
 # Watch nodes
@@ -463,8 +463,8 @@ terraform apply
 # Using AWS CLI
 aws eks update-nodegroup-version \
   --cluster-name baseline-eks \
-  --nodegroup-name baseline-node-group \
-  --launch-template name=baseline-node-group,version=PREVIOUS_VERSION
+  --nodegroup-name nodes \
+  --launch-template name=nodes,version=PREVIOUS_VERSION
 ```
 
 ### 4. Rollback Add-ons
